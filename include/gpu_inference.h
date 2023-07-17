@@ -2,10 +2,40 @@
 #define UNTITLED2_GPU_INFERENCE_H
 
 #include <memory>
+#include <unordered_map>
+#include <list>
+#include <vector>
+
 class Model;
 class ImageData;
 
-void inferenceOnGPU(std::unique_ptr<Model>& model, ImageData& img, int imgIdx, int numBt);
+struct MKN {int m; int k; int n;};
+
+class InferenceManager {
+public:
+    InferenceManager(Model* model, int imgCnt, int inpSz, int numBt);
+    void inferenceOnGPU(ImageData& img, int imgIdx, std::vector<int8_t>& labels);
+    int matchCount() const { return m_matchCount; }
+    int noMat() const { return m_noMat; }
+    ~InferenceManager();
+private:
+
+    int m_imgCnt = 0;
+    int m_inpSz = 0;
+    int m_numBt = 1;
+    Model* m_model = nullptr;
+
+    std::vector<MKN> m_mkn;
+    std::vector<float*> m_wBuffers;
+    std::vector<float*> m_bBuffers;
+    std::vector<float*> m_outBuffers;
+    float* m_inpBuffer = nullptr;
+
+
+    int m_matchCount = 0;
+    int m_noMat = 0;
+};
+
 
 
 #endif //UNTITLED2_GPU_INFERENCE_H

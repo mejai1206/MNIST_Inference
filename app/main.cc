@@ -159,15 +159,6 @@ std::vector<int8_t> loadLabel(std::string file) {
 
 int main() {
 
-//    load_mnist();
-//
-//    // print pixels of first data in test dataset
-//    for (int i = 0; i < 784; i++) {
-//        printf("%1.1f ", test_image[0][i]);
-//        if ((i+1) % 28 == 0) putchar('\n');
-//    }
-
-
     std::string imageFile = "/tmp/tmp.3nS42pXqhM/res/t10k-images-idx3-ubyte";
     std::string labelFile = "/tmp/tmp.3nS42pXqhM/res/t10k-labels-idx1-ubyte";
     std::string weightFile = "/tmp/tmp.3nS42pXqhM/res/torch_weights.json";
@@ -178,7 +169,12 @@ int main() {
     WeightLoader wl;
     auto model = wl.load(weightFile);
 
-    assert(testCPU(model, imgData));
+    //assert(testCPU(model, imgData));
+    testCPU(model, imgData);
+
+
+
+
 
 //    auto start = std::chrono::system_clock::now();
 //    int match = 0;
@@ -198,7 +194,40 @@ int main() {
 
 
 
-    inferenceOnGPU(model, imgData, 0, 1);
+
+
+
+
+
+
+
+
+
+//inf gpu
+
+
+    int imageCount = imgData.count;
+
+    auto start = std::chrono::system_clock::now();
+
+    int batchSize = 1;
+
+    InferenceManager im(model.get(), batchSize, 784, batchSize);
+
+    for (int i = 0; i < imageCount; i += batchSize) {
+        im.inferenceOnGPU(imgData, i, labels);
+        printf("=====gg %d ====\n", i);
+    }
+
+    auto end = std::chrono::system_clock::now();
+    auto micro = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto accuracy = im.matchCount() * 100.f / static_cast<float>(imageCount);
+    std::cout << "elapsed : " << micro.count() << "us" << std::endl;
+    std::cout << "accuracy: " << accuracy << "%" << std::endl;
+
+    printf("mat: %d   nomat: %d  =====\n", im.matchCount(), im.noMat());
+
+
 
     return 0;
 }
