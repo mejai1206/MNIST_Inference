@@ -3,7 +3,6 @@
 
 #include <fstream>
 #include <sstream>
-//#include <rapidjson/document.h>
 #include <vector>
 #include <unistd.h>
 #include <stdio.h>
@@ -38,12 +37,12 @@ public:
         printf("magic: %x, count: %u, rows: %u, cols: %u\n", magic, count, rows, cols);
 
 
+        //with transform
         for(int i = 0; i < count; ++i) {
             for(int j = 0; j < rows*cols; ++j) {
                 uint8_t c;
                 read(fd, &c, sizeof(c));
-                //printf("c: %d \n", (int)c);
-                this->data.push_back((float)c / 255.f);
+                this->data.push_back((((float)c/255.f) - 0.1307f) / 0.3081f);
             }
         }
 
@@ -66,27 +65,27 @@ public:
 
 
 ///// utils
-std::vector<int8_t> loadLabel(std::string file) {
-    auto fd = open(file.c_str(), O_RDONLY);
-    assert(fd > 0);
-
-    int32_t tmp = 0;
-    read(fd, &tmp, sizeof(tmp));
-    int32_t magic = be32toh(tmp);
-
-    read(fd, &tmp, sizeof(tmp));
-    int32_t count = be32toh(tmp);
-
-    std::vector<int8_t> labels;
-    for(int i=0; i<count; ++i) {
-        int8_t label;
-        read(fd, &label, sizeof(label));
-        labels.emplace_back(label);
-    }
-    printf("magic: %x, count: %d\n", magic, count);
-    close(fd);
-    return labels;
-}
+//std::vector<int8_t> loadLabel(std::string file) {
+//    auto fd = open(file.c_str(), O_RDONLY);
+//    assert(fd > 0);
+//
+//    int32_t tmp = 0;
+//    read(fd, &tmp, sizeof(tmp));
+//    int32_t magic = be32toh(tmp);
+//
+//    read(fd, &tmp, sizeof(tmp));
+//    int32_t count = be32toh(tmp);
+//
+//    std::vector<int8_t> labels;
+//    for(int i=0; i<count; ++i) {
+//        int8_t label;
+//        read(fd, &label, sizeof(label));
+//        labels.emplace_back(label);
+//    }
+//    printf("magic: %x, count: %d\n", magic, count);
+//    close(fd);
+//    return labels;
+//}
 
 
 

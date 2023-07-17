@@ -7,7 +7,7 @@
 #include <chrono>
 #include "../include/ImageData.h"
 #include "../include/weight_loader.h"
-#include "../include/mnist.h"
+#include "../include/gpu_inference.h"
 
 
 void log_softmax1d(std::vector<float>& input) {
@@ -60,42 +60,14 @@ void matReLUOnCPU(std::vector<float>& C, int M, int N) {
     }
 }
 
-void softmaxOnCPU(std::vector<float>& input, std::vector<float>& output,
-                  int M, int N) {
-
-    for (int i = 0; i < M; ++i) {
-        float maxValue = input[i * M + 0];
-        for (int j = 1; j < N; ++j) {
-            if (maxValue < input[i * M + j])
-                maxValue = input[i * M + j];
-        }
-
-        for (int j = 0; j < N; ++j) {
-            output[i * N + j] = std::exp(input[i * N + j] - maxValue); //numer
-        }
-    }
-
-    for (int i = 0; i < M; ++i) {
-        float sum = 0.f; //denom
-        for (int j = 0; j < N; ++j)
-            sum += output[i * N + j];
-
-        for (int j = 0; j < N; ++j)
-            output[i * N + j] /= sum;
-    }
-}
-
-
-std::pair<std::vector<float>, int> inferenceOnCPU(std::unique_ptr<Model>& model, ImageData& img, int imgIdx, std::vector<int8_t>& labels) {
+std::pair<std::vector<float>, int> inferenceOnCPU(std::unique_ptr<Model>& model, ImageData& img, int imgIdx) {
     const int num_bt = 1;
     const int inp_sz = img.cols * img.rows; //784
     std::vector<float> inp(num_bt * inp_sz);
-    constexpr float MEAN = 0.1307f;
-    constexpr float VAR = 0.3081f;
 
     //copy - transform
     for (int i = 0; i < inp.size(); ++i) {
-        inp[i] = (img.data[(imgIdx * inp_sz) + i] - MEAN) / VAR;
+        inp[i] = img.data[(imgIdx * inp_sz) + i];
     }
 
     auto& linears = model->linears;
@@ -110,8 +82,9 @@ std::pair<std::vector<float>, int> inferenceOnCPU(std::unique_ptr<Model>& model,
     std::vector<float> C0(M * N, 0.f);
     matMulOnCPU(inp, linears[0].w, C0, M, K, N);
     matAddBiasOnCPU(C0, linears[0].b, M, N);
+    //printf("===== C0: %f %f %f ==\n", C0[0], C0[1], C0[2]);
     matReLUOnCPU(C0, M, N);
-
+    printf("===== C0: %f %f %f ==\n", C0[0], C0[1], C0[2]);
 
     //lyr0 - lyr1
     K = N;
@@ -133,10 +106,6 @@ std::pair<std::vector<float>, int> inferenceOnCPU(std::unique_ptr<Model>& model,
     matAddBiasOnCPU(C2, linears[2].b, M, N);
     log_softmax1d(C2);
 
-//    for (int i = 0; i < 10; ++i) {
-//        printf("==== softmax[%d] : %f =====\n", i, C2[i]);
-//    }
-
     int ret = 0;
     for (int i = 1; i < 10; ++i) {
         if (C2[ret] < C2[i]) {
@@ -148,8 +117,8 @@ std::pair<std::vector<float>, int> inferenceOnCPU(std::unique_ptr<Model>& model,
 }
 
 
-bool testCPU(std::unique_ptr<Model>& model, ImageData& img, std::vector<int8_t>& labels) {
-    auto softMaxRet = inferenceOnCPU(model, img, 0, labels);
+bool testCPU(std::unique_ptr<Model>& model, ImageData& img) {
+    auto softMaxRet = inferenceOnCPU(model, img, 0);
 
     float firstRowSoftMax[10] = {
             -25.5225, -21.9758, -22.0153, -19.5940, -27.5558, -25.8997, -32.2494,
@@ -161,6 +130,29 @@ bool testCPU(std::unique_ptr<Model>& model, ImageData& img, std::vector<int8_t>&
             return false;
 
     return true;
+}
+
+/// utils
+std::vector<int8_t> loadLabel(std::string file) {
+    auto fd = open(file.c_str(), O_RDONLY);
+    assert(fd > 0);
+
+    int32_t tmp = 0;
+    read(fd, &tmp, sizeof(tmp));
+    int32_t magic = be32toh(tmp);
+
+    read(fd, &tmp, sizeof(tmp));
+    int32_t count = be32toh(tmp);
+
+    std::vector<int8_t> labels;
+    for(int i=0; i<count; ++i) {
+        int8_t label;
+        read(fd, &label, sizeof(label));
+        labels.emplace_back(label);
+    }
+    printf("magic: %x, count: %d\n", magic, count);
+    close(fd);
+    return labels;
 }
 
 
@@ -186,24 +178,27 @@ int main() {
     WeightLoader wl;
     auto model = wl.load(weightFile);
 
+    assert(testCPU(model, imgData));
 
-    //assert(testCPU(model, imgData, labels));
+//    auto start = std::chrono::system_clock::now();
+//    int match = 0;
+//    int imageCount = imgData.count;
+//    for (int i = 0; i < imageCount; ++i) {
+//        int ret = inferenceOnCPU(model, imgData, i).second;
+//        if (ret == labels[i])
+//            match++;
+//        printf("===== %d ====\n", i);
+//    }
+//
+//    auto end = std::chrono::system_clock::now();
+//    auto micro = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+//    auto accuracy = match * 100.f / static_cast<float>(imageCount);
+//    std::cout << "elapsed : " << micro.count() << "us" << std::endl;
+//    std::cout << "accuracy: " << accuracy << "%" << std::endl;
 
-    auto start = std::chrono::system_clock::now();
-    int match = 0;
-    int imageCount = imgData.count;
-    for (int i = 0; i < imageCount; ++i) {
-        int ret = inferenceOnCPU(model, imgData, i, labels).second;
-        if (ret == labels[i])
-            match++;
-        printf("===== %d ====\n", i);
-    }
 
-    auto end = std::chrono::system_clock::now();
-    auto micro = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    auto accuracy = match * 100.f / static_cast<float>(imageCount);
-    std::cout << "elapsed : " << micro.count() << "us" << std::endl;
-    std::cout << "accuracy: " << accuracy << "%" << std::endl;
+
+    inferenceOnGPU(model, imgData, 0, 1);
 
     return 0;
 }

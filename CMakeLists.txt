@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.23)
-project(untitled2)
+project(untitled2 LANGUAGES C CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
-# add_executable(untitled2 main.cc)
+#set_target_properties(untitled2 PROPERTIES
+#        CUDA_SEPARABLE_COMPILATION ON) NO
+
 
 # 라이브러리 파일은 빌드 디렉토리 안에 lib 폴더에 출력.
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
