@@ -145,7 +145,7 @@ std::vector<int8_t> loadLabel(std::string file) {
     int32_t count = be32toh(tmp);
 
     std::vector<int8_t> labels;
-    for(int i=0; i<count; ++i) {
+    for(int i=0; i < count; ++i) {
         int8_t label;
         read(fd, &label, sizeof(label));
         labels.emplace_back(label);
@@ -210,13 +210,13 @@ int main() {
 
     auto start = std::chrono::system_clock::now();
 
-    int batchSize = 1;
+    int batchSize = 100;
 
-    InferenceManager im(model.get(), batchSize, 784, batchSize);
+    InferenceManager im(model.get(), 784, batchSize);
 
     for (int i = 0; i < imageCount; i += batchSize) {
         im.inferenceOnGPU(imgData, i, labels);
-        printf("=====gg %d ====\n", i);
+        printf("=====dd %d ====\n", i);
     }
 
     auto end = std::chrono::system_clock::now();

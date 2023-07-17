@@ -8,25 +8,27 @@
 
 #define BLK_SZ 16
 
-void log_softmax1d(float* input, int sz) {
-    float sum = 0.0f;
+void log_softmax2d(float* input, int M, int N) {
 
-    for (int i = 0; i < sz; i++) {
-        input[i] = std::exp(input[i]);
-        sum += input[i];
+    std::vector<float> sum(M, 0.f);
+
+    for (int row = 0; row < M; ++row) {
+        for (int col = 0; col < N; ++col) {
+            int idx = row * N + col;
+            input[idx] = std::exp(input[idx]);
+            sum[row] += input[idx];
+        }
     }
 
-    for (int i = 0; i < sz; i++) {
-        input[i] /= sum;
-        input[i] = log(input[i]);
+    for (int row = 0; row < M; ++row) {
+        for (int col = 0; col < N; ++col) {
+            int idx = row * N + col;
+            input[idx] /= sum[row];
+            input[idx] = log(input[idx]);
+        }
     }
 }
 
-__global__ void test(float* out)
-{
-    out[threadIdx.x] = 10.0;
-    printf("kkkkk12\n");
-}
 
 //__global__ void linearWithReLU(float* X, float* W, float* B, float* out,
 //                                int M, int K, int N) {
@@ -118,7 +120,7 @@ __global__ void linearReLU(float* X, float* W, float* B, float* out,
     out[r * N + c] = acc;
 }
 
-InferenceManager::InferenceManager(Model* model, int imgCnt, int inpSz, int numBt) : m_model(model), m_imgCnt(imgCnt), m_inpSz(inpSz), m_numBt(numBt) {
+InferenceManager::InferenceManager(Model* model, int inpSz, int numBt) : m_model(model), m_inpSz(inpSz), m_numBt(numBt) {
 
     auto& linears = model->linears;
 
@@ -164,8 +166,8 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
 
     auto& linears = m_model->linears;
 
-    cudaMemcpy(m_inpBuffer, img.data.data() + (imgIdx * m_numBt * m_inpSz),
-               sizeof(float) * m_numBt * m_inpSz, cudaMemcpyHostToDevice);
+    cudaMemcpy(m_inpBuffer, img.data.data() + (imgIdx * m_inpSz),
+               sizeof(float) * m_numBt * m_inpSz, cudaMemcpyHostToDevice); //여기서 디진듯.,
 
     for (int i = 0; i < linears.size(); ++i) {
         int M = m_mkn[i].m;
@@ -191,52 +193,37 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
         cudaDeviceSynchronize();
         assert(cudaGetLastError() == cudaSuccess);
 
-//        bool test = true;
-//        if (test) {
-//            if (i == 1) {
-//                float* tmp_out = new float[sizeof(float) * M * N];
-//                cudaMemcpy(tmp_out, out, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
-//                printf("GPU==== C1 [%d] %f %f %f \n\n", i, tmp_out[0], tmp_out[1], tmp_out[2]);
-//                delete[] tmp_out;
-//            }
-//        }
     }
 
     cudaDeviceSynchronize();
 
     float* outHost = new float[m_numBt * 10];
     cudaMemcpy(outHost, m_outBuffers.back(), sizeof(float) * m_numBt * 10, cudaMemcpyDeviceToHost);
-    log_softmax1d(outHost, 10);
+    log_softmax2d(outHost, m_numBt, 10);
 
+    for (int row = 0; row < m_numBt; ++row) {
+        int retIdx = row * 10 + 0;
+        int retLabel = 0;
+        for (int col = 1; col < 10; ++col) {
+            int idx = row * 10 + col;
+            if (outHost[retIdx] < outHost[idx]) {
+                retIdx = idx;
+                retLabel = col;
+            }
+        }
 
-    ///test////
-//    float firstRowSoftMax[10] = {
-//            -25.5225, -21.9758, -22.0153, -19.5940, -27.5558, -25.8997, -32.2494,
-//            0.0000, -26.3183, -18.2736
-//    };
-
-//    for (int i = 0; i < 10; ++i) {
-//        printf("====== [%d]: %f ====\n", i, outHost[i]);
-//        assert(abs(outHost[i] - firstRowSoftMax[i]) <= 0.01);
-//    }
-//    printf("========Pass77!!!======\n");
-    /////////
-
-
-
-
-    int ret = 0;
-    for (int i = 1; i < 10; ++i) {
-        if (outHost[ret] < outHost[i]) {
-            ret = i;
+        if (retLabel == labels[imgIdx + row]) {
+            m_matchCount++;
+        } else {
+            m_noMat++;
         }
     }
 
-    if (ret == labels[imgIdx])
-        m_matchCount++;
-    else
-        m_noMat++;
-
+//    if (ret == labels[imgIdx])
+//        m_matchCount++;
+//    else
+//        m_noMat++;
+//
 
     delete[] outHost;
 }
