@@ -212,7 +212,7 @@ int main() {
     auto micro = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     auto accuracy = im.matchCount() * 100.f / static_cast<float>(imageCount);
     std::cout << "elapsed : " << micro.count() << "us" << std::endl;
-    std::cout << "accuracy_: " << accuracy << "%" << std::endl;
+    std::cout << "accuracy: " << accuracy << "%" << std::endl;
 
     printf("mat: %d   nomat: %d  =====\n", im.matchCount(), im.noMat());
 

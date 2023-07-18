@@ -30,7 +30,7 @@ void log_softmax2d(float* input, int M, int N) {
 }
 
 __global__ void linear(float* X, float* W, float* B, float* out,
-                           int M, int K, int N) {
+                           int M, int K, int N, bool relu) {
     int row = blockDim.x * blockIdx.x + threadIdx.x;
     int col = blockDim.y * blockIdx.y + threadIdx.y;
 
@@ -70,52 +70,9 @@ __global__ void linear(float* X, float* W, float* B, float* out,
 
     float ret = acc + B[col];
 
-    out[row * N + col] = ret;
-}
-
-
-__global__ void linearReLU(float* X, float* W, float* B, float* out,
-                           int M, int K, int N) {
-    int row = blockDim.x * blockIdx.x + threadIdx.x;
-    int col = blockDim.y * blockIdx.y + threadIdx.y;
-
-    __shared__ float sX[BLK_SZ][BLK_SZ];
-    __shared__ float sW[BLK_SZ][BLK_SZ];
-
-    int localRow = threadIdx.x;
-    int localCol = threadIdx.y;
-
-    float acc = 0.f;
-
-    for (int b = 0; b < ceil( (float)K / BLK_SZ ); ++b) {
-        int offs = b * BLK_SZ;
-
-        if (row >= M || offs + localCol >= K)
-            sX[localRow][localCol] = 0.f;
-        else
-            sX[localRow][localCol] = X[row * K + (offs + localCol)];
-
-        if (col >= N || offs + localRow >= K)
-            sW[localRow][localCol] = 0.f;
-        else
-            sW[localRow][localCol] = W[(offs + localRow) * N + col];
-
-
-        __syncthreads();
-
-        for (int k = 0; k < BLK_SZ; ++k) {
-            acc += sX[localRow][k] * sW[k][localCol];
-        }
-
-        __syncthreads();
-    }
-
-    if (row >= M || col >= N)
-        return;
-
-    float ret = acc + B[col];
-    if (ret < 0.f)
+    if (relu && ret < 0.f) {
         ret = 0.f;
+    }
 
     out[row * N + col] = ret;
 }
@@ -223,14 +180,8 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
         float* B = m_bBuffers[i];
         float* out = m_outBuffers[i];
 
-        if (i < linears.size() - 1) {
-            linearReLU <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N);
-        } else {
-            linear <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N);
-        }
-
+        linear <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N, i < linears.size() - 1);
         assert(cudaGetLastError() == cudaSuccess);
-
     }
 
     // gpu matchCount
