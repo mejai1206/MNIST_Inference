@@ -7,7 +7,7 @@
 #include <chrono>
 #include "../include/ImageData.h"
 #include "../include/weight_loader.h"
-#include "../include/gpu_inference.h"
+#include "../include/gpu_inference.cuh"
 
 
 void log_softmax1d(std::vector<float>& input) {
@@ -205,14 +205,25 @@ int main() {
 
     for (int i = 0; i < imageCount; i += batchSize) {
         im.inferenceOnGPU(imgData, i, labels);
-//        printf("=====qwww %d ====\n", i);
     }
 
-    auto end = std::chrono::system_clock::now();
-    auto micro = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto endHost = std::chrono::system_clock::now();
+
+    while(!im.checkFinish()) {
+    }
+
+    auto endDevice = std::chrono::system_clock::now();
+
+//    auto end = std::chrono::system_clock::now();
+    auto elapsedHost = std::chrono::duration_cast<std::chrono::microseconds>(endHost - start);
+    auto elapedDevice = std::chrono::duration_cast<std::chrono::microseconds>(endDevice - start);
+
     auto accuracy = im.matchCount() * 100.f / static_cast<float>(imageCount);
-    std::cout << "elapsed : " << micro.count() << "us" << std::endl;
-    std::cout << "accuracy: " << accuracy << "%" << std::endl;
+
+    std::cout << "elapsedHost : " << elapsedHost.count() << "us" << std::endl;
+    std::cout << "elapedDevice : " << elapedDevice.count() << "us" << std::endl;
+
+    std::cout << "accuracy_3: " << accuracy << "%" << std::endl;
 
     printf("mat: %d   nomat: %d  =====\n", im.matchCount(), im.noMat());
 

@@ -1,5 +1,5 @@
-#ifndef UNTITLED2_GPU_INFERENCE_H
-#define UNTITLED2_GPU_INFERENCE_H
+#ifndef UNTITLED2_GPU_INFERENCE_CUH
+#define UNTITLED2_GPU_INFERENCE_CUH
 
 #include <memory>
 #include <unordered_map>
@@ -15,11 +15,13 @@ class InferenceManager {
 public:
     InferenceManager(Model* model, int inpSz, int numBt, const std::vector<int8_t>& labels);
     void inferenceOnGPU(ImageData& img, int imgIdx, std::vector<int8_t>& labels);
+    bool checkFinish();
+
     int matchCount() const { return m_matchCount; }
     int noMat() const { return m_noMat; }
     ~InferenceManager();
-private:
 
+private:
     int m_inpSz = 0;
     int m_numBt = 1;
     Model* m_model = nullptr;
@@ -39,4 +41,4 @@ private:
 
 
 
-#endif //UNTITLED2_GPU_INFERENCE_H
+#endif //UNTITLED2_GPU_INFERENCE_CUH

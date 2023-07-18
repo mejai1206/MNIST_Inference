@@ -1,4 +1,8 @@
-#include "gpu_inference.h"
+#include "gpu_inference.cuh"
+
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+
 #include "ImageData.h"
 #include "weight_loader.h"
 #include <stdio.h>
@@ -8,26 +12,8 @@
 
 #define BLK_SZ 16
 
-void log_softmax2d(float* input, int M, int N) {
+cudaEvent_t finishEvt = NULL;
 
-    std::vector<float> sum(M, 0.f);
-
-    for (int row = 0; row < M; ++row) {
-        for (int col = 0; col < N; ++col) {
-            int idx = row * N + col;
-            input[idx] = std::exp(input[idx]);
-            sum[row] += input[idx];
-        }
-    }
-
-    for (int row = 0; row < M; ++row) {
-        for (int col = 0; col < N; ++col) {
-            int idx = row * N + col;
-            input[idx] /= sum[row];
-            input[idx] = log(input[idx]);
-        }
-    }
-}
 
 __global__ void linear(float* X, float* W, float* B, float* out,
                            int M, int K, int N, bool relu) {
@@ -78,10 +64,7 @@ __global__ void linear(float* X, float* W, float* B, float* out,
 }
 
 __global__ void matchCount_k(float* X, int8_t* labels, int* count, int M, int N, int imgIdx) {
-
     int row = threadIdx.x;
-    int col = threadIdx.y;
-
     int retIdx = row * N;
     int retLabel = 0;
 
@@ -97,11 +80,6 @@ __global__ void matchCount_k(float* X, int8_t* labels, int* count, int M, int N,
         atomicAdd(count, 1);
     }
 }
-
-__global__ void test_k(int* count) {
-    atomicAdd(count, 1);
-}
-
 
 InferenceManager::InferenceManager(Model* model, int inpSz, int numBt,
                                    const std::vector<int8_t>& labels) : m_model(model), m_inpSz(inpSz), m_numBt(numBt) {
@@ -145,8 +123,7 @@ InferenceManager::InferenceManager(Model* model, int inpSz, int numBt,
     memsetGPU(&m_inpBuffer, sizeof(float) * m_numBt * m_inpSz);
 
 
-
-    //memcpyGPU(&m_labelBuffer, labels.data(), sizeof(int8_t) * labels.size());
+    //todo clean up
     int m = sizeof(int8_t) * labels.size();
     cudaMalloc(&m_labelBuffer, m);
     cudaMemset(m_labelBuffer, 0, m);
@@ -184,15 +161,28 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
         assert(cudaGetLastError() == cudaSuccess);
     }
 
-    // gpu matchCount
     dim3 gridDim(1);
     dim3 blockDim(m_numBt);
     matchCount_k <<<gridDim, blockDim>>>(m_outBuffers.back(), m_labelBuffer, m_pCnt, m_numBt, 10, imgIdx);
-    int a = 0;
-    cudaMemcpy(&a, m_pCnt, sizeof(int), cudaMemcpyDeviceToHost);
-    m_matchCount += a;
 
-    cudaMemset(m_pCnt, 0, sizeof(int));
+    bool isLastOperation = (imgIdx == 10000 - m_numBt);
+    if (isLastOperation) {
+        cudaEventCreate(&finishEvt);
+        cudaEventRecord(finishEvt);
+    }
+}
+
+bool InferenceManager::checkFinish() {
+    assert(finishEvt != NULL);
+    bool isFinish = cudaEventQuery(finishEvt) == cudaSuccess;
+
+    if (isFinish) {
+        int cntHost = 0;
+        cudaMemcpy(&cntHost, m_pCnt, sizeof(int), cudaMemcpyDeviceToHost);
+        m_matchCount = cntHost;
+    }
+
+    return isFinish;
 }
 
 InferenceManager::~InferenceManager() {
@@ -204,5 +194,43 @@ InferenceManager::~InferenceManager() {
 
     if (m_inpBuffer) {
         cudaFree(m_inpBuffer);
+        cudaFree(m_labelBuffer);
+        cudaFree(m_pCnt);
+    }
+
+    cudaEventDestroy(finishEvt);
+    finishEvt = NULL;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+void log_softmax2d(float* input, int M, int N) {
+
+    std::vector<float> sum(M, 0.f);
+
+    for (int row = 0; row < M; ++row) {
+        for (int col = 0; col < N; ++col) {
+            int idx = row * N + col;
+            input[idx] = std::exp(input[idx]);
+            sum[row] += input[idx];
+        }
+    }
+
+    for (int row = 0; row < M; ++row) {
+        for (int col = 0; col < N; ++col) {
+            int idx = row * N + col;
+            input[idx] /= sum[row];
+            input[idx] = log(input[idx]);
+        }
     }
 }
