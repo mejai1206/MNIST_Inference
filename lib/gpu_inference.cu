@@ -14,17 +14,16 @@
 
 cudaEvent_t finishEvt = NULL;
 
-
 __global__ void linear(float* X, float* W, float* B, float* out,
-                           int M, int K, int N, bool relu) {
-    int row = blockDim.x * blockIdx.x + threadIdx.x;
-    int col = blockDim.y * blockIdx.y + threadIdx.y;
+                       int M, int K, int N, bool relu) {
+    int col = blockDim.x * blockIdx.x + threadIdx.x;
+    int row = blockDim.y * blockIdx.y + threadIdx.y;
 
     __shared__ float sX[BLK_SZ][BLK_SZ];
     __shared__ float sW[BLK_SZ][BLK_SZ];
 
-    int localRow = threadIdx.x;
-    int localCol = threadIdx.y;
+    int localCol = threadIdx.x;
+    int localRow = threadIdx.y;
 
     float acc = 0.f;
 
@@ -62,6 +61,7 @@ __global__ void linear(float* X, float* W, float* B, float* out,
 
     out[row * N + col] = ret;
 }
+
 
 __global__ void matchCount_k(float* X, int8_t* labels, int* count, int M, int N, int imgIdx) {
     int row = threadIdx.x;
@@ -149,7 +149,7 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
         int K = m_mkn[i].k;
         int N = m_mkn[i].n;
 
-        dim3 gridDim(ceil((float)M / BLK_SZ), ceil((float)N / BLK_SZ));
+        dim3 gridDim(ceil((float)N / BLK_SZ), ceil((float)M / BLK_SZ)); //y-row, x-col
         dim3 blockDim(BLK_SZ, BLK_SZ);
 
         float* X = (i == 0) ? m_inpBuffer : m_outBuffers[i-1];
