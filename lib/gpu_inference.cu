@@ -14,8 +14,8 @@
 
 cudaEvent_t finishEvt = NULL;
 
-__global__ void linear(float* X, float* W, float* B, float* out,
-                       int M, int K, int N, bool relu) {
+__global__ void linearKernel(float* X, float* W, float* B, float* out,
+                              int M, int K, int N, bool relu) {
     int col = blockDim.x * blockIdx.x + threadIdx.x;
     int row = blockDim.y * blockIdx.y + threadIdx.y;
 
@@ -63,7 +63,7 @@ __global__ void linear(float* X, float* W, float* B, float* out,
 }
 
 
-__global__ void matchCount_k(float* X, int8_t* labels, int* count, int M, int N, int imgIdx) {
+__global__ void matchCountKernel(float* X, int8_t* labels, int* count, int M, int N, int imgIdx) {
     int row = threadIdx.x;
     int retIdx = row * N;
     int retLabel = 0;
@@ -143,6 +143,7 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
 
     cudaMemcpy(m_inpBuffer, img.data.data() + (imgIdx * m_inpSz),
                sizeof(float) * m_numBt * m_inpSz, cudaMemcpyHostToDevice);
+    assert(cudaGetLastError() == cudaSuccess);
 
     for (int i = 0; i < linears.size(); ++i) {
         int M = m_mkn[i].m;
@@ -157,13 +158,13 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
         float* B = m_bBuffers[i];
         float* out = m_outBuffers[i];
 
-        linear <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N, i < linears.size() - 1);
+        linearKernel <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N, i < linears.size() - 1);
         assert(cudaGetLastError() == cudaSuccess);
     }
 
     dim3 gridDim(1);
     dim3 blockDim(m_numBt);
-    matchCount_k <<<gridDim, blockDim>>>(m_outBuffers.back(), m_labelBuffer, m_pCnt, m_numBt, 10, imgIdx);
+    matchCountKernel <<<gridDim, blockDim>>>(m_outBuffers.back(), m_labelBuffer, m_pCnt, m_numBt, 10, imgIdx);
 
     bool isLastOperation = (imgIdx == 10000 - m_numBt);
     if (isLastOperation) {

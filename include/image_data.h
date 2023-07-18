@@ -34,9 +34,6 @@ public:
         read(fd, &tmp, sizeof(tmp));
         int32_t cols = be32toh(tmp);
 
-        printf("magic: %x, count: %u, rows: %u, cols: %u\n", magic, count, rows, cols);
-
-
         //with transform
         for(int i = 0; i < count; ++i) {
             for(int j = 0; j < rows*cols; ++j) {
@@ -60,36 +57,6 @@ public:
     int32_t cols;
     std::vector<float> data;
 };
-
-
-
-
-///// utils
-//std::vector<int8_t> loadLabel(std::string file) {
-//    auto fd = open(file.c_str(), O_RDONLY);
-//    assert(fd > 0);
-//
-//    int32_t tmp = 0;
-//    read(fd, &tmp, sizeof(tmp));
-//    int32_t magic = be32toh(tmp);
-//
-//    read(fd, &tmp, sizeof(tmp));
-//    int32_t count = be32toh(tmp);
-//
-//    std::vector<int8_t> labels;
-//    for(int i=0; i<count; ++i) {
-//        int8_t label;
-//        read(fd, &label, sizeof(label));
-//        labels.emplace_back(label);
-//    }
-//    printf("magic: %x, count: %d\n", magic, count);
-//    close(fd);
-//    return labels;
-//}
-
-
-
-
 
 
 #endif //NUMBERCLASSIFIER_IMAGEDATA_H

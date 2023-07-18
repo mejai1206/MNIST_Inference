@@ -49,9 +49,6 @@ std::unique_ptr<Model> WeightLoader::load(std::string filePath) {
         model->linears.emplace_back(linear);
     }
 
-    model->printShape();
-
-
     return model;
 }
 

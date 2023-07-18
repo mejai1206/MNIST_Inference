@@ -5,7 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
-#include "../include/ImageData.h"
+#include "../include/image_data.h"
 #include "../include/weight_loader.h"
 #include "../include/gpu_inference.cuh"
 
@@ -82,9 +82,7 @@ std::pair<std::vector<float>, int> inferenceOnCPU(std::unique_ptr<Model>& model,
     std::vector<float> C0(M * N, 0.f);
     matMulOnCPU(inp, linears[0].w, C0, M, K, N);
     matAddBiasOnCPU(C0, linears[0].b, M, N);
-    //printf("===== C0: %f %f %f ==\n", C0[0], C0[1], C0[2]);
     matReLUOnCPU(C0, M, N);
-    printf("===== C0: %f %f %f ==\n", C0[0], C0[1], C0[2]);
 
     //lyr0 - lyr1
     K = N;
@@ -150,7 +148,7 @@ std::vector<int8_t> loadLabel(std::string file) {
         read(fd, &label, sizeof(label));
         labels.emplace_back(label);
     }
-    printf("magic: %x, count: %d\n", magic, count);
+
     close(fd);
     return labels;
 }
@@ -170,28 +168,6 @@ int main() {
     auto model = wl.load(weightFile);
 
     //assert(testCPU(model, imgData));
-    testCPU(model, imgData);
-
-
-
-
-
-//    auto start = std::chrono::system_clock::now();
-//    int match = 0;
-//    int imageCount = imgData.count;
-//    for (int i = 0; i < imageCount; ++i) {
-//        int ret = inferenceOnCPU(model, imgData, i).second;
-//        if (ret == labels[i])
-//            match++;
-//        printf("===== %d ====\n", i);
-//    }
-//
-//    auto end = std::chrono::system_clock::now();
-//    auto micro = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-//    auto accuracy = match * 100.f / static_cast<float>(imageCount);
-//    std::cout << "elapsed : " << micro.count() << "us" << std::endl;
-//    std::cout << "accuracy: " << accuracy << "%" << std::endl;
-
 
 
 //inf gpu
@@ -199,9 +175,9 @@ int main() {
 
     auto start = std::chrono::system_clock::now();
 
-    int batchSize = 50;
+    int batchSize = 200;
 
-    InferenceManager im(model.get(), 784, batchSize, labels);
+    InferenceManager im(model.get(), imgData.rows * imgData.cols, batchSize, labels);
 
     for (int i = 0; i < imageCount; i += batchSize) {
         im.inferenceOnGPU(imgData, i, labels);
@@ -209,12 +185,10 @@ int main() {
 
     auto endHost = std::chrono::system_clock::now();
 
-    while(!im.checkFinish()) {
-    }
+    while(!im.checkFinish()) { }
 
     auto endDevice = std::chrono::system_clock::now();
 
-//    auto end = std::chrono::system_clock::now();
     auto elapsedHost = std::chrono::duration_cast<std::chrono::microseconds>(endHost - start);
     auto elapedDevice = std::chrono::duration_cast<std::chrono::microseconds>(endDevice - start);
 
@@ -223,11 +197,9 @@ int main() {
     std::cout << "elapsedHost : " << elapsedHost.count() << "us" << std::endl;
     std::cout << "elapedDevice : " << elapedDevice.count() << "us" << std::endl;
 
-    std::cout << "accuracy_3: " << accuracy << "%" << std::endl;
+    std::cout << "accuracy_11: " << accuracy << "%" << std::endl;
 
     printf("mat: %d   nomat: %d  =====\n", im.matchCount(), im.noMat());
-
-
 
     return 0;
 }

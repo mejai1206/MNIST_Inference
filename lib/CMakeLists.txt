@@ -8,10 +8,9 @@ add_library(shape STATIC ${SRC_FILES})
 set_target_properties(shape PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
 
-# shape 의 include 경로 지정
 target_include_directories(shape PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-# shape 를 C++ 17 로 컴파일
+
 target_compile_features(shape PRIVATE cxx_std_17)
 
 
