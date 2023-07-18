@@ -194,18 +194,7 @@ int main() {
 
 
 
-
-
-
-
-
-
-
-
-
 //inf gpu
-
-
     int imageCount = imgData.count;
 
     auto start = std::chrono::system_clock::now();

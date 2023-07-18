@@ -229,12 +229,9 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
             linear <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N);
         }
 
-        cudaDeviceSynchronize();
         assert(cudaGetLastError() == cudaSuccess);
 
     }
-
-    cudaDeviceSynchronize();
 
     // gpu matchCount
     dim3 gridDim(1);
@@ -244,37 +241,7 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
     cudaMemcpy(&a, m_pCnt, sizeof(int), cudaMemcpyDeviceToHost);
     m_matchCount += a;
 
-    printf("CS==== numbt: %d    a: %d ====\n", m_numBt, a);
-
     cudaMemset(m_pCnt, 0, sizeof(int));
-
-
-
-
-
-    //cpu matchCount
-//    float* outHost = new float[m_numBt * 10];
-//    cudaMemcpy(outHost, m_outBuffers.back(), sizeof(float) * m_numBt * 10, cudaMemcpyDeviceToHost);
-//    //log_softmax2d(outHost, m_numBt, 10);
-//
-//    for (int row = 0; row < m_numBt; ++row) {
-//        int retIdx = row * 10 + 0;
-//        int retLabel = 0;
-//        for (int col = 1; col < 10; ++col) {
-//            int idx = row * 10 + col;
-//            if (outHost[retIdx] < outHost[idx]) {
-//                retIdx = idx;
-//                retLabel = col;
-//            }
-//        }
-//
-//        if (retLabel == labels[imgIdx + row]) {
-//            m_matchCount++;
-//        } else {
-//            m_noMat++;
-//        }
-//    }
-//    delete[] outHost;
 }
 
 InferenceManager::~InferenceManager() {
