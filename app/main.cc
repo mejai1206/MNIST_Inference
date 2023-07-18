@@ -9,6 +9,10 @@
 #include "../include/weight_loader.h"
 #include "../include/gpu_inference.cuh"
 
+const std::string imageFile = "/tmp/tmp.3nS42pXqhM/res/t10k-images-idx3-ubyte";
+const std::string labelFile = "/tmp/tmp.3nS42pXqhM/res/t10k-labels-idx1-ubyte";
+const std::string weightFile = "/tmp/tmp.3nS42pXqhM/res/torch_weights.json";
+
 
 void log_softmax1d(std::vector<float>& input) {
     float sum = 0.0f;
@@ -130,8 +134,7 @@ bool testCPU(std::unique_ptr<Model>& model, ImageData& img) {
     return true;
 }
 
-/// utils
-std::vector<int8_t> loadLabel(std::string file) {
+void loadLabel(std::string file, std::vector<int8_t>& labels) {
     auto fd = open(file.c_str(), O_RDONLY);
     assert(fd > 0);
 
@@ -142,62 +145,55 @@ std::vector<int8_t> loadLabel(std::string file) {
     read(fd, &tmp, sizeof(tmp));
     int32_t count = be32toh(tmp);
 
-    std::vector<int8_t> labels;
     for(int i=0; i < count; ++i) {
         int8_t label;
         read(fd, &label, sizeof(label));
-        labels.emplace_back(label);
+        labels.push_back(label);
     }
 
     close(fd);
-    return labels;
 }
 
 
 
+
+
 int main() {
-
-    std::string imageFile = "/tmp/tmp.3nS42pXqhM/res/t10k-images-idx3-ubyte";
-    std::string labelFile = "/tmp/tmp.3nS42pXqhM/res/t10k-labels-idx1-ubyte";
-    std::string weightFile = "/tmp/tmp.3nS42pXqhM/res/torch_weights.json";
-
     ImageData imgData(imageFile);
-    std::vector<int8_t> labels = loadLabel(labelFile);
 
-    WeightLoader wl;
-    auto model = wl.load(weightFile);
+    std::vector<int8_t> labels;
+    loadLabel(labelFile, labels);
 
+    auto model = WeightLoader::load(weightFile);
     //assert(testCPU(model, imgData));
 
 
 //inf gpu
     int imageCount = imgData.count;
-
     auto start = std::chrono::system_clock::now();
-
     int batchSize = 200;
 
-    InferenceManager im(model.get(), imgData.rows * imgData.cols, batchSize, labels);
+    InferenceManager inferenceManager(model.get(), imgData.rows * imgData.cols, batchSize, labels);
 
     for (int i = 0; i < imageCount; i += batchSize) {
-        im.inferenceOnGPU(imgData, i, labels);
+        inferenceManager.inferenceOnGPU(imgData, i, labels);
     }
 
     auto endHost = std::chrono::system_clock::now();
 
-    while(!im.checkFinish()) { }
+    while(!inferenceManager.checkFinish()) { }
 
     auto endDevice = std::chrono::system_clock::now();
 
     auto elapsedHost = std::chrono::duration_cast<std::chrono::microseconds>(endHost - start);
     auto elapedDevice = std::chrono::duration_cast<std::chrono::microseconds>(endDevice - start);
 
-    auto accuracy = im.matchCount() * 100.f / static_cast<float>(imageCount);
+    auto accuracy = inferenceManager.matchCount() * 100.f / static_cast<float>(imageCount);
 
     std::cout << "elapsedHost : " << elapsedHost.count() << "us" << std::endl;
     std::cout << "elapedDevice : " << elapedDevice.count() << "us" << std::endl;
 
-    std::cout << "accuracy_11: " << accuracy << "%" << std::endl;
+    std::cout << "accuracy_15: " << accuracy << "%" << std::endl;
 
     return 0;
 }

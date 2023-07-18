@@ -20,7 +20,7 @@ public:
 
 class WeightLoader {
 public:
-    std::unique_ptr<Model> load(std::string filePath);
+    static std::unique_ptr<Model> load(std::string filePath);
 };
 
 

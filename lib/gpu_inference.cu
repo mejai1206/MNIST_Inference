@@ -27,19 +27,22 @@ __global__ void linearKernel(float* X, float* W, float* B, float* out,
 
     float acc = 0.f;
 
-    for (int b = 0; b < ceil( (float)K / BLK_SZ ); ++b) {
+    int bSize = ceil( (float)K / BLK_SZ );
+
+    for (int b = 0; b < bSize; ++b) {
         int offs = b * BLK_SZ;
 
-        if (row >= M || offs + localCol >= K)
+        if (row >= M || offs + localCol >= K) {
             sX[localRow][localCol] = 0.f;
-        else
+        } else {
             sX[localRow][localCol] = X[row * K + (offs + localCol)];
+        }
 
-        if (col >= N || offs + localRow >= K)
+        if (col >= N || offs + localRow >= K) {
             sW[localRow][localCol] = 0.f;
-        else
+        } else {
             sW[localRow][localCol] = W[(offs + localRow) * N + col];
-
+        }
 
         __syncthreads();
 
@@ -81,9 +84,24 @@ __global__ void matchCountKernel(float* X, int8_t* labels, int* count, int M, in
     }
 }
 
+
+template <typename T>
+void memcpyGPU(T** p, const T* data, int memSz) {
+    cudaMalloc(p, memSz);
+    cudaMemset(*p, 0, memSz);
+    cudaMemcpy(*p, data, memSz, cudaMemcpyHostToDevice);
+    ASSERT_CUDA;
+}
+
+template <typename T>
+void memsetGPU(T** p, int memSz) {
+    cudaMalloc(p, memSz);
+    cudaMemset(*p, 0, memSz);
+    ASSERT_CUDA;
+};
+
 InferenceManager::InferenceManager(Model* model, int inpSz, int numBt,
                                    const std::vector<int8_t>& labels) : m_model(model), m_inpSz(inpSz), m_numBt(numBt) {
-
     auto& linears = model->linears;
 
     m_mkn.push_back({numBt, inpSz, linears[0].col});
@@ -91,19 +109,6 @@ InferenceManager::InferenceManager(Model* model, int inpSz, int numBt,
     for (int i = 1; i < linears.size(); ++i) {
         m_mkn.push_back({numBt, linears[i-1].col, linears[i].col});
     }
-
-    auto memcpyGPU = [](float** p, float* data, int memSz) {
-        cudaMalloc(p, memSz);
-        cudaMemset(*p, 0, memSz);
-        cudaMemcpy(*p, data, memSz, cudaMemcpyHostToDevice);
-        assert(cudaGetLastError() == cudaSuccess);
-    };
-
-    auto memsetGPU = [](float** p, int memSz) {
-        cudaMalloc(p, memSz);
-        cudaMemset(*p, 0, memSz);
-        assert(cudaGetLastError() == cudaSuccess);
-    };
 
     for (int i = 0; i < linears.size(); ++i) {
         int M = m_mkn[i].m;
@@ -121,19 +126,8 @@ InferenceManager::InferenceManager(Model* model, int inpSz, int numBt,
     }
 
     memsetGPU(&m_inpBuffer, sizeof(float) * m_numBt * m_inpSz);
-
-
-    //todo clean up
-    int m = sizeof(int8_t) * labels.size();
-    cudaMalloc(&m_labelBuffer, m);
-    cudaMemset(m_labelBuffer, 0, m);
-    cudaMemcpy(m_labelBuffer, labels.data(), m, cudaMemcpyHostToDevice);
-    assert(cudaGetLastError() == cudaSuccess);
-
-
-    cudaMalloc((void**)&m_pCnt, sizeof(int));
-    cudaMemset(m_pCnt, 0, sizeof(int));
-    assert(cudaGetLastError() == cudaSuccess);
+    memcpyGPU(&m_labelBuffer, labels.data(), sizeof(int8_t) * labels.size());
+    memsetGPU(&m_pCnt, sizeof(int));
 }
 
 
@@ -143,23 +137,22 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
 
     cudaMemcpy(m_inpBuffer, img.data.data() + (imgIdx * m_inpSz),
                sizeof(float) * m_numBt * m_inpSz, cudaMemcpyHostToDevice);
-    assert(cudaGetLastError() == cudaSuccess);
+    ASSERT_CUDA;
 
     for (int i = 0; i < linears.size(); ++i) {
         int M = m_mkn[i].m;
         int K = m_mkn[i].k;
         int N = m_mkn[i].n;
 
-        dim3 gridDim(ceil((float)N / BLK_SZ), ceil((float)M / BLK_SZ)); //y-row, x-col
-        dim3 blockDim(BLK_SZ, BLK_SZ);
-
         float* X = (i == 0) ? m_inpBuffer : m_outBuffers[i-1];
         float* W = m_wBuffers[i];
         float* B = m_bBuffers[i];
         float* out = m_outBuffers[i];
 
+        dim3 gridDim(ceil((float)N / BLK_SZ), ceil((float)M / BLK_SZ)); //y-row, x-col
+        dim3 blockDim(BLK_SZ, BLK_SZ);
         linearKernel <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N, i < linears.size() - 1);
-        assert(cudaGetLastError() == cudaSuccess);
+        ASSERT_CUDA;
     }
 
     dim3 gridDim(1);

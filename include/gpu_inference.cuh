@@ -6,6 +6,8 @@
 #include <list>
 #include <vector>
 
+#define ASSERT_CUDA assert(cudaGetLastError() == cudaSuccess)
+
 class Model;
 class ImageData;
 
