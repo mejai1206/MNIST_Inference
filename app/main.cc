@@ -154,46 +154,57 @@ void loadLabel(std::string file, std::vector<int8_t>& labels) {
     close(fd);
 }
 
+class Timer {
+public:
+    Timer() {
+        m_start = std::chrono::system_clock::now();
+    }
 
+    void printElapsed(const char* tag) {
+        auto end = std::chrono::system_clock::now();
+        auto du = std::chrono::duration_cast<std::chrono::milliseconds>(end - m_start);
+        std::cout << tag << du.count() << "ms" << std::endl;
+    }
 
+    std::chrono::time_point<std::chrono::system_clock> m_start;
+};
 
 
 int main() {
+    // 1 resource load
+    Timer resTimer;
+
     ImageData imgData(imageFile);
 
     std::vector<int8_t> labels;
     loadLabel(labelFile, labels);
 
     auto model = WeightLoader::load(weightFile);
-    //assert(testCPU(model, imgData));
 
+    resTimer.printElapsed("Resource File reading time: ");
 
-//inf gpu
+    Timer inferenceMeomoryLoadTimer;
+
     int imageCount = imgData.count;
-    auto start = std::chrono::system_clock::now();
-    int batchSize = 200;
+    int batchSize = 1;
 
     InferenceManager inferenceManager(model.get(), imgData.rows * imgData.cols, batchSize, labels);
+    inferenceMeomoryLoadTimer.printElapsed("inference memory loading time: ");
 
+    Timer inferenceTimer;
     for (int i = 0; i < imageCount; i += batchSize) {
         inferenceManager.inferenceOnGPU(imgData, i, labels);
     }
 
-    auto endHost = std::chrono::system_clock::now();
+    inferenceTimer.printElapsed("inference start ~ end(host): ");
 
     while(!inferenceManager.checkFinish()) { }
 
-    auto endDevice = std::chrono::system_clock::now();
+    inferenceTimer.printElapsed("inference start ~ end(device waiting): ");
 
-    auto elapsedHost = std::chrono::duration_cast<std::chrono::microseconds>(endHost - start);
-    auto elapedDevice = std::chrono::duration_cast<std::chrono::microseconds>(endDevice - start);
 
     auto accuracy = inferenceManager.matchCount() * 100.f / static_cast<float>(imageCount);
-
-    std::cout << "elapsedHost : " << elapsedHost.count() << "us" << std::endl;
-    std::cout << "elapedDevice : " << elapedDevice.count() << "us" << std::endl;
-
-    std::cout << "accuracy_15: " << accuracy << "%" << std::endl;
+    std::cout << "accuracy: " << accuracy << "%" << std::endl;
 
     return 0;
 }

@@ -10,6 +10,8 @@
 #include <cmath>
 #include <cassert>
 
+#define CDIV(X, Y) (((X) + (Y) - 1) / (Y))
+
 #define BLK_SZ 16
 
 cudaEvent_t finishEvt = NULL;
@@ -27,7 +29,7 @@ __global__ void linearKernel(float* X, float* W, float* B, float* out,
 
     float acc = 0.f;
 
-    int bSize = ceil( (float)K / BLK_SZ );
+    int bSize = CDIV(K, BLK_SZ);
 
     for (int b = 0; b < bSize; ++b) {
         int offs = b * BLK_SZ;
@@ -71,7 +73,7 @@ __global__ void matchCountKernel(float* X, int8_t* labels, int* count, int M, in
     int retIdx = row * N;
     int retLabel = 0;
 
-    for (int i = 1; i < N; ++i) {
+    for (int i = 1; i < N; ++i) { //10 shared
         int idx = row * N + i;
         if (X[retIdx] < X[idx]) {
             retIdx = idx;
@@ -80,7 +82,7 @@ __global__ void matchCountKernel(float* X, int8_t* labels, int* count, int M, in
     }
 
     if (retLabel == labels[imgIdx + row]) {
-        atomicAdd(count, 1);
+        atomicAdd(count, 1); //reduction
     }
 }
 
@@ -149,7 +151,7 @@ void InferenceManager::inferenceOnGPU(ImageData& img, int imgIdx, std::vector<in
         float* B = m_bBuffers[i];
         float* out = m_outBuffers[i];
 
-        dim3 gridDim(ceil((float)N / BLK_SZ), ceil((float)M / BLK_SZ)); //y-row, x-col
+        dim3 gridDim(CDIV(N, BLK_SZ), CDIV(M, BLK_SZ)); //y-row, x-col
         dim3 blockDim(BLK_SZ, BLK_SZ);
         linearKernel <<<gridDim,  blockDim>>>(X, W, B, out, M, K, N, i < linears.size() - 1);
         ASSERT_CUDA;
@@ -188,43 +190,20 @@ InferenceManager::~InferenceManager() {
 
     if (m_inpBuffer) {
         cudaFree(m_inpBuffer);
+    }
+
+    if (m_labelBuffer) {
         cudaFree(m_labelBuffer);
+    }
+
+    if (m_labelBuffer) {
+        cudaFree(m_labelBuffer);
+    }
+
+    if (m_pCnt) {
         cudaFree(m_pCnt);
     }
 
     cudaEventDestroy(finishEvt);
     finishEvt = NULL;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-void log_softmax2d(float* input, int M, int N) {
-
-    std::vector<float> sum(M, 0.f);
-
-    for (int row = 0; row < M; ++row) {
-        for (int col = 0; col < N; ++col) {
-            int idx = row * N + col;
-            input[idx] = std::exp(input[idx]);
-            sum[row] += input[idx];
-        }
-    }
-
-    for (int row = 0; row < M; ++row) {
-        for (int col = 0; col < N; ++col) {
-            int idx = row * N + col;
-            input[idx] /= sum[row];
-            input[idx] = log(input[idx]);
-        }
-    }
 }
