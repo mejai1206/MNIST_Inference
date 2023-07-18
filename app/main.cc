@@ -210,20 +210,20 @@ int main() {
 
     auto start = std::chrono::system_clock::now();
 
-    int batchSize = 100;
+    int batchSize = 50;
 
-    InferenceManager im(model.get(), 784, batchSize);
+    InferenceManager im(model.get(), 784, batchSize, labels);
 
     for (int i = 0; i < imageCount; i += batchSize) {
         im.inferenceOnGPU(imgData, i, labels);
-        printf("=====dd %d ====\n", i);
+//        printf("=====qwww %d ====\n", i);
     }
 
     auto end = std::chrono::system_clock::now();
     auto micro = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     auto accuracy = im.matchCount() * 100.f / static_cast<float>(imageCount);
     std::cout << "elapsed : " << micro.count() << "us" << std::endl;
-    std::cout << "accuracy: " << accuracy << "%" << std::endl;
+    std::cout << "accuracy_: " << accuracy << "%" << std::endl;
 
     printf("mat: %d   nomat: %d  =====\n", im.matchCount(), im.noMat());
 

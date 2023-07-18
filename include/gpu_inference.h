@@ -13,7 +13,7 @@ struct MKN {int m; int k; int n;};
 
 class InferenceManager {
 public:
-    InferenceManager(Model* model, int inpSz, int numBt);
+    InferenceManager(Model* model, int inpSz, int numBt, const std::vector<int8_t>& labels);
     void inferenceOnGPU(ImageData& img, int imgIdx, std::vector<int8_t>& labels);
     int matchCount() const { return m_matchCount; }
     int noMat() const { return m_noMat; }
@@ -25,11 +25,13 @@ private:
     Model* m_model = nullptr;
 
     std::vector<MKN> m_mkn;
+
     std::vector<float*> m_wBuffers;
     std::vector<float*> m_bBuffers;
     std::vector<float*> m_outBuffers;
     float* m_inpBuffer = nullptr;
-
+    int8_t* m_labelBuffer = nullptr;
+    int* m_pCnt;
 
     int m_matchCount = 0;
     int m_noMat = 0;
