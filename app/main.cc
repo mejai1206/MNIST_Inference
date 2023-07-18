@@ -199,7 +199,5 @@ int main() {
 
     std::cout << "accuracy_11: " << accuracy << "%" << std::endl;
 
-    printf("mat: %d   nomat: %d  =====\n", im.matchCount(), im.noMat());
-
     return 0;
 }

@@ -16,9 +16,7 @@ public:
     InferenceManager(Model* model, int inpSz, int numBt, const std::vector<int8_t>& labels);
     void inferenceOnGPU(ImageData& img, int imgIdx, std::vector<int8_t>& labels);
     bool checkFinish();
-
     int matchCount() const { return m_matchCount; }
-    int noMat() const { return m_noMat; }
     ~InferenceManager();
 
 private:
@@ -36,7 +34,6 @@ private:
     int* m_pCnt;
 
     int m_matchCount = 0;
-    int m_noMat = 0;
 };
 
 
