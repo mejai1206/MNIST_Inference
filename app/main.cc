@@ -13,127 +13,6 @@ const std::string imageFile = "/tmp/tmp.3nS42pXqhM/res/t10k-images-idx3-ubyte";
 const std::string labelFile = "/tmp/tmp.3nS42pXqhM/res/t10k-labels-idx1-ubyte";
 const std::string weightFile = "/tmp/tmp.3nS42pXqhM/res/torch_weights.json";
 
-
-void log_softmax1d(std::vector<float>& input) {
-    float sum = 0.0f;
-
-    for (int i = 0; i < input.size(); i++) {
-        input[i] = std::exp(input[i]);
-        sum += input[i];
-    }
-
-    for (int i = 0; i < input.size(); i++) {
-        input[i] /= sum;
-        input[i] = log(input[i]);
-    }
-}
-
-void matMulOnCPU(std::vector<float>& A,
-                 std::vector<float>& B,
-                 std::vector<float>& C,
-                 int M, int K, int N) {
-
-    for (int row = 0; row < M; row++) {
-        for (int col = 0; col < N; col++) {
-            C[row * N + col] = 0.f;
-            for (int k = 0; k < K; ++k) {
-                C[row * N + col] += (A[row * K + k] * B[k * N + col]); //C(M,N)
-            }
-        }
-    }
-}
-
-
-void matAddBiasOnCPU(std::vector<float>& C, std::vector<float>& bias,
-                     int M, int N) {
-
-    for (int row = 0; row < M; ++row) {
-        for (int col = 0; col < N; col++) {
-            C[row * N + col] += bias[col];
-        }
-    }
-}
-
-void matReLUOnCPU(std::vector<float>& C, int M, int N) {
-    for (int row = 0; row < M; ++row) {
-        for (int col = 0; col < N; col++) {
-            int cIndex = row * N + col;
-            if (C[cIndex] < 0.f)
-                C[cIndex] = 0.f;
-        }
-    }
-}
-
-std::pair<std::vector<float>, int> inferenceOnCPU(std::unique_ptr<Model>& model, ImageData& img, int imgIdx) {
-    const int num_bt = 1;
-    const int inp_sz = img.cols * img.rows; //784
-    std::vector<float> inp(num_bt * inp_sz);
-
-    //copy - transform
-    for (int i = 0; i < inp.size(); ++i) {
-        inp[i] = img.data[(imgIdx * inp_sz) + i];
-    }
-
-    auto& linears = model->linears;
-
-    //printf("======================================== \n");
-
-    int M = num_bt;
-    int K = inp_sz;
-    int N = linears[0].col;
-    assert(K == linears[0].row);
-
-    std::vector<float> C0(M * N, 0.f);
-    matMulOnCPU(inp, linears[0].w, C0, M, K, N);
-    matAddBiasOnCPU(C0, linears[0].b, M, N);
-    matReLUOnCPU(C0, M, N);
-
-    //lyr0 - lyr1
-    K = N;
-    N = linears[1].col;
-    assert(K == linears[1].row);
-
-    std::vector<float> C1(M * N, 0.f);
-    matMulOnCPU(C0, linears[1].w, C1, M, K, N);
-    matAddBiasOnCPU(C1, linears[1].b, M, N);
-    matReLUOnCPU(C1, M, N);
-
-    //lyr1 - lyr2
-    K = N;
-    N = linears[2].col;
-    assert(K == linears[2].row);
-
-    std::vector<float> C2(M * N, 0.f);
-    matMulOnCPU(C1, linears[2].w, C2, M, K, N);
-    matAddBiasOnCPU(C2, linears[2].b, M, N);
-    log_softmax1d(C2);
-
-    int ret = 0;
-    for (int i = 1; i < 10; ++i) {
-        if (C2[ret] < C2[i]) {
-            ret = i;
-        }
-    }
-
-    return {C2, ret};
-}
-
-
-bool testCPU(std::unique_ptr<Model>& model, ImageData& img) {
-    auto softMaxRet = inferenceOnCPU(model, img, 0);
-
-    float firstRowSoftMax[10] = {
-            -25.5225, -21.9758, -22.0153, -19.5940, -27.5558, -25.8997, -32.2494,
-            0.0000, -26.3183, -18.2736
-    };
-
-    for (int i = 0; i < 10; ++i)
-        if (abs(softMaxRet.first[i] - firstRowSoftMax[i]) > 0.0001)
-            return false;
-
-    return true;
-}
-
 void loadLabel(std::string file, std::vector<int8_t>& labels) {
     auto fd = open(file.c_str(), O_RDONLY);
     assert(fd > 0);
@@ -171,7 +50,6 @@ public:
 
 
 int main() {
-    // 1 resource load
     Timer resTimer;
 
     ImageData imgData(imageFile);
